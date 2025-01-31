@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using SplitOn;
 using System.Diagnostics;
 
 internal class Program
@@ -11,12 +12,14 @@ internal class Program
                         .AddUserSecrets<Program>()
     .Build();
 
-        var workers = await GetWorkersAsync(config["WMSA_Connection"]);
+        //var workers = await GetWorkersAsync(config["WMSA_Connection"]);
 
-        foreach (var worker in workers)
-        {
-            Trace.WriteLine($"{worker.Code_Work}\t{worker.Name}{Environment.NewLine}{worker.TypeWork.Name}{Environment.NewLine}");
-        }
+        var stackSborkaItemsAsync = await GetStackSborkaItemsAsync(config["WMSA_Connection"]);
+
+        //foreach (var worker in workers)
+        //{
+        //    Trace.WriteLine($"{worker.Code_Work}\t{worker.Name}{Environment.NewLine}{worker.TypeWork.Name}{Environment.NewLine}");
+        //}
 
         Console.ReadKey();
     }
@@ -30,18 +33,15 @@ internal class Program
             return workers;
         }
     }
-}
 
-public sealed record Worker
-{
-    public int Code_Work { get; set; }
-    public string Name { get; set; }
-    public byte Code_Tw { get; set; }
-    public TypeWork TypeWork { get; set; }
-}
+    private static async Task<IEnumerable<StackSborka>> GetStackSborkaItemsAsync(string connectionString)
+    {
+        using (var connection = new SqlConnection(connectionString))
+        {
+            IEnumerable<StackSborka> stackSborkaItems = await connection.QueryAsync<StackSborka, PrikazItem, StackSborka>(@"select StackSborka.prikaz,  StackSborka.num_list, prikazy.prikaz, prikazy.num_nak,  prikazy.data_vip
+    from StackSborka inner join prikazy on StackSborka.prikaz = prikazy.prikaz", (stackSborkaItem, prikaz) => { stackSborkaItem.PrikazForStackSborka = prikaz; stackSborkaItem.Prikaz = prikaz.Prikaz; return stackSborkaItem; }, splitOn: "prikaz");
 
-public sealed record TypeWork
-{
-    public byte Code_Tw { get; set; }
-    public string Name { get; set; }
+            return stackSborkaItems;
+        }
+    }
 }
